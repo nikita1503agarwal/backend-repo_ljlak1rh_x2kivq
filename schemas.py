@@ -1,48 +1,66 @@
 """
-Database Schemas
+Database Schemas for Keystone POS
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
+Each Pydantic model represents a MongoDB collection. The collection name is the
+lowercase of the class name (e.g., Product -> "product").
 
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+These schemas validate data for products, customers, taxes, users, and sales.
 """
-
+from typing import Optional, List, Literal
 from pydantic import BaseModel, Field
-from typing import Optional
+from datetime import datetime
 
-# Example schemas (replace with your own):
+# Core domain models
 
-class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+class TaxRate(BaseModel):
+    name: str = Field(..., description="Display name e.g., TVA 19%")
+    rate: float = Field(..., ge=0, le=1, description="Tax rate as decimal (e.g., 0.19 for 19%)")
+    code: str = Field(..., description="Tax code identifier e.g., TVA19")
+    is_default: bool = Field(False, description="Whether this is the default tax")
 
 class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
+    sku: str = Field(..., description="Stock Keeping Unit")
+    name: str = Field(..., description="Product name")
+    price: float = Field(..., ge=0, description="Unit price")
+    stock: float = Field(0, ge=0, description="Current stock quantity")
+    unit: str = Field("unit", description="Measurement unit (unit, kg, pcs, etc.)")
+    tax_code: Optional[str] = Field(None, description="Tax code to apply (e.g., TVA19)")
+    barcode: Optional[str] = Field(None, description="Barcode value if available")
+    category: Optional[str] = Field(None, description="Category name")
+    is_active: bool = Field(True)
 
-# Add your own schemas here:
-# --------------------------------------------------
+class Customer(BaseModel):
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    note: Optional[str] = None
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+class User(BaseModel):
+    username: str
+    display_name: str
+    role: Literal["cashier", "manager", "admin"] = "cashier"
+    is_active: bool = True
+
+class SaleItem(BaseModel):
+    sku: str
+    name: str
+    qty: float = Field(..., gt=0)
+    unit_price: float = Field(..., ge=0)
+    tax_code: Optional[str] = None
+
+class Payment(BaseModel):
+    method: Literal["cash", "card", "mixed"] = "cash"
+    paid: float = Field(..., ge=0)
+    change: float = 0
+
+class Sale(BaseModel):
+    items: List[SaleItem]
+    customer_name: Optional[str] = None
+    subtotal: float = 0
+    tax_total: float = 0
+    total: float = 0
+    tax_breakdown: Optional[dict] = None
+    payment: Payment
+    user: Optional[str] = None
+    timestamp: Optional[datetime] = None
